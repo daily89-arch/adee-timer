@@ -1,7 +1,7 @@
 {
   "name": "Adée Timer",
   "short_name": "Adée Timer",
-  "start_url": "./index.html",
+  "start_url": "/",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f7f3ec",
