@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#59654f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Adée Timer">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Adée Mobilité - Chronomètre</title>
+<style>
+body{margin:0;font-family:Arial,sans-serif;background:#f7f3ec;color:#222}
+main{max-width:700px;margin:auto;padding:20px}
+h1{text-align:center;color:#59654f;font-family:Georgia,serif;font-size:42px;margin:10px 0 0}
+.sub{text-align:center;letter-spacing:6px;color:#59654f;margin-bottom:22px}
+.card{background:#fff;border:1px solid #d8d0c5;border-radius:18px;padding:18px;margin:14px 0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+label{display:block;font-size:14px;color:#746d65;margin-bottom:6px}
+input,select{width:100%;box-sizing:border-box;padding:12px;font-size:18px;border:1px solid #d8d0c5;border-radius:10px;background:#fff}
+.presets{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.preset{padding:9px 12px;border-radius:999px;border:1px solid #59654f;background:#fff;color:#59654f;font-weight:bold}
+.timer{text-align:center}
+.phase{font-size:24px;font-weight:bold;color:#6b3157;text-transform:uppercase}
+.clock{font-size:78px;font-weight:bold;margin:12px 0;font-variant-numeric:tabular-nums}
+.progress{height:12px;background:#eee8df;border-radius:99px;overflow:hidden}
+.bar{height:100%;width:0;background:#59654f}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+button{font:inherit}
+.main{padding:14px;border-radius:12px;border:0;font-weight:bold;font-size:17px}
+.start{background:#59654f;color:white}.pause{background:#6b3157;color:white}.secondary{background:white;border:1px solid #d8d0c5}
+.info{display:flex;justify-content:space-between;color:#746d65;margin-top:12px;font-size:14px}
+.note{font-size:13px;color:#746d65;line-height:1.4}
+@media(max-width:520px){.grid{grid-template-columns:1fr}.clock{font-size:66px}}
+</style>
+</head>
+<body>
+<main>
+<h1>Adée</h1><div class="sub">MOBILITÉ</div>
+
+<div class="card">
+<div class="grid">
+<div><label>Durée totale</label><select id="total"><option>10</option><option>15</option><option selected>20</option><option>25</option><option>30</option><option>45</option><option>60</option></select></div>
+<div><label>Préparation</label><select id="prep"><option value="0">Aucune</option><option value="5">5 secondes</option><option value="10" selected>10 secondes</option><option value="15">15 secondes</option></select></div>
+<div><label>Exercice / étirement (sec)</label><input id="work" type="number" value="45" min="1"></div>
+<div><label>Pause / transition (sec)</label><input id="rest" type="number" value="15" min="0"></div>
+</div>
+<div class="presets">
+<button class="preset" data-w="45" data-r="15">45 / 15</button>
+<button class="preset" data-w="60" data-r="15">60 / 15</button>
+<button class="preset" data-w="45" data-r="10">45 / 10</button>
+<button class="preset" data-w="30" data-r="15">30 / 15</button>
+<button class="preset" data-w="60" data-r="30">60 / 30</button>
+</div>
+<p><label><input id="countdown" type="checkbox" checked style="width:auto"> 3 petits bips avant chaque changement</label></p>
+</div>
+
+<div class="card timer">
+<div id="phase" class="phase">Prêt</div>
+<div id="clock" class="clock">00:45</div>
+<div id="totalLabel">Total : 20:00</div>
+<div class="progress"><div id="bar" class="bar"></div></div>
+<div class="info"><span id="interval">Intervalle 0</span><span id="elapsed">Écoulé 00:00</span></div>
+<div class="controls">
+<button id="start" class="main start">Démarrer</button>
+<button id="pause" class="main pause">Pause</button>
+<button id="skip" class="main secondary">Passer</button>
+<button id="reset" class="main secondary">Réinitialiser</button>
+</div>
+</div>
+
+<div class="card note">Le volume média du téléphone doit être activé. Sur certains appareils, il vaut mieux garder l’écran actif pendant le chronomètre pour entendre tous les signaux.</div>
+</main>
+
+<script>
+let ctx,running=false,paused=false,timer=null,last=0,elapsed=0,phaseLeft=45,phase='ready',count=0,totalSec=1200,workSec=45,restSec=15,prepSec=10;
+const $=x=>document.getElementById(x);
+const fmt=s=>{s=Math.max(0,Math.ceil(s));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')};
+function audio(){if(!ctx)ctx=new (window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume()}
+function beep(f=880,d=.12){audio();let o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=f;g.gain.value=.16;o.connect(g);g.connect(ctx.destination);o.start();g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+d);o.stop(ctx.currentTime+d);if(navigator.vibrate)navigator.vibrate(40)}
+function signal(){
+  audio();
+  const now=ctx.currentTime;
+  const master=ctx.createGain();
+  master.gain.setValueAtTime(.0001,now);
+  master.gain.exponentialRampToValueAtTime(.30,now+.012);
+  master.gain.exponentialRampToValueAtTime(.0001,now+1.15);
+  master.connect(ctx.destination);
+
+  [[880,.20],[1320,.09],[1760,.045]].forEach(([freq,gain])=>{
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.type='sine'; o.frequency.value=freq;
+    g.gain.value=gain;
+    o.connect(g); g.connect(master);
+    o.start(now); o.stop(now+1.15);
+  });
+
+  setTimeout(()=>{
+    const t=ctx.currentTime;
+    const m=ctx.createGain();
+    m.gain.setValueAtTime(.0001,t);
+    m.gain.exponentialRampToValueAtTime(.25,t+.01);
+    m.gain.exponentialRampToValueAtTime(.0001,t+.95);
+    m.connect(ctx.destination);
+    [[1175,.18],[1762,.07]].forEach(([freq,gain])=>{
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.type='sine';o.frequency.value=freq;g.gain.value=gain;
+      o.connect(g);g.connect(m);o.start(t);o.stop(t+.95);
+    });
+  },170);
+
+  if(navigator.vibrate) navigator.vibrate(70);
+}
+function settings(){totalSec=parseInt($('total').value)*60;workSec=parseInt($('work').value)||45;restSec=parseInt($('rest').value)||0;prepSec=parseInt($('prep').value)||0;$('totalLabel').textContent='Total : '+fmt(totalSec)}
+function render(){$('clock').textContent=fmt(phaseLeft);$('elapsed').textContent='Écoulé '+fmt(elapsed);$('interval').textContent='Intervalle '+count;$('bar').style.width=Math.min(100,elapsed/totalSec*100)+'%'}
+function setPhase(p,s){phase=p;phaseLeft=s;if(p==='work'){count++;$('phase').textContent='Exercice / étirement'}else if(p==='rest')$('phase').textContent='Pause';else if(p==='prep')$('phase').textContent='Préparation';render()}
+let b3=false,b2=false,b1=false;
+function clearWarn(){b3=b2=b1=false}
+function next(){signal();clearWarn();if(elapsed>=totalSec)return finish();if(phase==='work'){if(restSec>0)setPhase('rest',restSec);else setPhase('work',workSec)}else setPhase('work',workSec)}
+function tick(){if(!running||paused)return;let now=performance.now(),dt=(now-last)/1000;last=now;elapsed+=dt;phaseLeft-=dt;if($('countdown').checked){if(phaseLeft<=3&&phaseLeft>2&&!b3){beep(720,.06);b3=true}if(phaseLeft<=2&&phaseLeft>1&&!b2){beep(720,.06);b2=true}if(phaseLeft<=1&&phaseLeft>0&&!b1){beep(720,.06);b1=true}}if(elapsed>=totalSec)return finish();if(phaseLeft<=0)next();render()}
+function start(){audio();settings();if(!running){running=true;paused=false;elapsed=0;count=0;clearWarn();last=performance.now();if(prepSec>0)setPhase('prep',prepSec);else setPhase('work',workSec);timer=setInterval(tick,100)}else if(paused){paused=false;last=performance.now();$('start').textContent='Démarrer'}}
+function pause(){if(!running)return;paused=!paused;$('phase').textContent=paused?'En pause':(phase==='work'?'Exercice / étirement':phase==='rest'?'Pause':'Préparation');$('start').textContent=paused?'Reprendre':'Démarrer';last=performance.now()}
+function finish(){running=false;paused=false;clearInterval(timer);phaseLeft=0;$('phase').textContent='Terminé';$('clock').textContent='00:00';$('bar').style.width='100%';signal();setTimeout(signal,350)}
+function reset(){running=false;paused=false;clearInterval(timer);settings();elapsed=0;count=0;phase='ready';phaseLeft=workSec;$('phase').textContent='Prêt';$('start').textContent='Démarrer';render()}
+$('start').onclick=start;$('pause').onclick=pause;$('skip').onclick=()=>{if(running)next()};$('reset').onclick=reset;
+document.querySelectorAll('.preset').forEach(b=>b.onclick=()=>{$('work').value=b.dataset.w;$('rest').value=b.dataset.r;reset()});
+['total','prep','work','rest'].forEach(id=>$(id).onchange=()=>{if(!running)reset()});
+reset();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+}
+</script>
+</body></html>
