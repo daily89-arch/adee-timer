@@ -2,7 +2,7 @@
   "name": "Adée Timer",
   "short_name": "Adée Timer",
   "start_url": "/",
-  "scope": "./",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f7f3ec",
   "theme_color": "#59654f",
